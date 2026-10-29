@@ -20,6 +20,9 @@
         if (s.kind !== "video" || !/^(inbound|outbound)-rtp$/.test(s.type)) return;
         const prev = a[i].get(s.id);
         const bytes = s.type === "inbound-rtp" ? "bytesReceived" : "bytesSent";
+        // Sender side: what the receiver reports back, and the bandwidth estimate of the selected ICE pair.
+        const remote = s.remoteId && stats.get(s.remoteId);
+        const pair = [...stats.values()].find(p => p.type === "candidate-pair" && p.nominated && p.state === "succeeded");
         rows.push({
             dir: s.type.split("-")[0],
             res: `${s.frameWidth}x${s.frameHeight}`,
@@ -31,7 +34,12 @@
             limitTime: s.qualityLimitationDurations && JSON.stringify(s.qualityLimitationDurations),
             lost: s.packetsLost,
             freezes: s.freezeCount,
-            qpAvg: s.qpSum && s.framesDecoded ? (s.qpSum / s.framesDecoded).toFixed(1) : s.qpSum && s.framesEncoded ? (s.qpSum / s.framesEncoded).toFixed(1) : undefined
+            qpAvg: s.qpSum && s.framesDecoded ? (s.qpSum / s.framesDecoded).toFixed(1) : s.qpSum && s.framesEncoded ? (s.qpSum / s.framesEncoded).toFixed(1) : undefined,
+            bweKbps: s.type === "outbound-rtp" && pair?.availableOutgoingBitrate ? Math.round(pair.availableOutgoingBitrate / 1000) : undefined,
+            rttMs: remote?.roundTripTime != null ? Math.round(remote.roundTripTime * 1000) : pair?.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : undefined,
+            lossPct: remote?.fractionLost != null ? (remote.fractionLost * 100).toFixed(1) : undefined,
+            nacks: s.nackCount,
+            retxKbps: prev && s.retransmittedBytesSent != null ? Math.round((s.retransmittedBytesSent - prev.retransmittedBytesSent) * 8 / 3000) : undefined
         });
     }));
     console.table(rows);
