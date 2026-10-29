@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = @PKG@
+
+[Action]
+Description = Starting Vesktop streams at a higher bandwidth estimate...
+When = PostTransaction
+Exec = /usr/bin/env VESKTOP_ASAR=@ASAR@ /usr/bin/python3 @LIB@/patch-stream-start.py

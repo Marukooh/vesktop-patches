@@ -13,8 +13,9 @@ MARKER = b"vesktopGoliveFix"
 PATCH  = (b'{find:"setDesktopInput=e=>{",/*vesktopGoliveFix*/replacement:{match:'
           b'/this\\.videoQualityManager\\.setGoliveQuality\\(\\{encode:(\\i),capture:\\1,bitrateMax:(\\i)\\}\\)/,'
           b'replace:"this.videoQualityManager.setGoliveQuality($self.patchStreamQuality({encode:{...$1},capture:{...$1},bitrateMax:$2}))"}},')
-# The patches array of Vesktop's ScreenSharePicker addPatch, whose $self has patchStreamQuality().
-ANCHOR = re.compile(rb'patches:\[(?=\{find:"this\.getDefaultGoliveQuality\(\)")')
+# Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list (whose $self
+# has patchStreamQuality()), so the other patches injected here can go in any order.
+ANCHOR = re.compile(rb'\{find:"this\.getDefaultGoliveQuality\(\)"')
 BLOCK  = 4 * 1024 * 1024
 
 def integrity(data):
@@ -40,7 +41,7 @@ if MARKER in js:
 m = ANCHOR.search(js)
 if not m:
     sys.exit("vesktop-stream-quality-fix: patchStreamQuality patch not found, not touching it - check ScreenSharePicker upstream")
-fix = js[:m.end()] + PATCH + js[m.end():]
+fix = js[:m.start()] + PATCH + js[m.start():]
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
 
 payload = json.dumps(header, separators=(",", ":")).encode()

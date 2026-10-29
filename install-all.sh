@@ -8,7 +8,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="${VESKTOP_PATCH_LIB:-/usr/local/lib/vesktop-patches}"
 HOOKS="${VESKTOP_HOOK_DIR:-/etc/pacman.d/hooks}"
-PATCHERS=(patch-venmic.py patch-stream-preview.py patch-stream-bitrate.py patch-stream-quality.py)
+PATCHERS=(patch-venmic.py patch-stream-preview.py patch-stream-bitrate.py patch-stream-quality.py patch-stream-start.py)
 
 if [[ $EUID -ne 0 && -z "${VESKTOP_PATCH_LIB:-}" ]]; then
     exec sudo --preserve-env=VESKTOP_ASAR,VESKTOP_PKG "$0" "$@"
