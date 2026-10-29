@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = vesktop-git
+
+[Action]
+Description = Patching venmic in Vesktop (loopback double-destroy crash)...
+When = PostTransaction
+Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-asar.py

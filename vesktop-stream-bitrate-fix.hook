@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = vesktop-git
+
+[Action]
+Description = Raising Vesktop Go Live start bitrate (blurry stream start)...
+When = PostTransaction
+Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-bitrate.py

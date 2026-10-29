@@ -1,0 +1,165 @@
+From ba8a813f27bb9ea8a71ff3326a509edbd90c3587 Mon Sep 17 00:00:00 2001
+From: Marco Luzzaro <marcoluzzaro99@gmail.com>
+Date: Tue, 6 Oct 2026 13:39:26 +0200
+Subject: [PATCH 4/4] fix(patchbay): harden mic creation and loopback
+ bookkeeping
+
+- Bound the wait for the virtual mic's ports (5s) instead of syncing forever
+  when they never show up.
+- Bail out of link() if the virtual mic could not be created; previously
+  virt_mic was dereferenced while empty.
+- Ignore loopbacks that destroyed themselves when deciding whether a node is
+  already linked, so such nodes get relinked on the next link event.
+- Forget the default speaker's node id once that node is removed, so a reused
+  id can't be mistaken for the default speaker.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ private/patchbay.impl.hpp |  5 ++++
+ src/patchbay.impl.cpp     | 50 +++++++++++++++++++++++++++++++++------
+ 2 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/private/patchbay.impl.hpp b/private/patchbay.impl.hpp
+index 7c159f0..9cfaa95 100644
+--- a/private/patchbay.impl.hpp
++++ b/private/patchbay.impl.hpp
+@@ -59,6 +59,9 @@ namespace vencord
+ 
+       public:
+         ~loopback();
++
++      public:
++        [[nodiscard]] bool alive() const;
+     };
+ 
+     enum class clean : std::uint8_t
+@@ -110,10 +113,12 @@ namespace vencord
+       private:
+         coco::task<void> create_mic(bool);
+         coco::task<void> mute(pw::node_info, bool);
++        coco::task<std::map<std::uint32_t, pw::port_info>> wait_for_ports(const pw::node_info &);
+         coco::task<void> redirect(std::optional<pw::node_info> = {});
+ 
+       private:
+         bool should_link(const pw::node_info &);
++        [[nodiscard]] bool has_loopback(std::uint32_t) const;
+         void link(const pw::node_info &, const pw::node_info &);
+ 
+       private:
+diff --git a/src/patchbay.impl.cpp b/src/patchbay.impl.cpp
+index 47743dd..69756d1 100644
+--- a/src/patchbay.impl.cpp
++++ b/src/patchbay.impl.cpp
+@@ -52,6 +52,11 @@ namespace vencord
+ 
+     loopback &loopback::operator=(loopback &&) noexcept = default;
+ 
++    bool loopback::alive() const
++    {
++        return m_state && m_state->module;
++    }
++
+     loopback::~loopback()
+     {
+         if (!m_state || !m_state->module)
+@@ -115,11 +120,11 @@ namespace vencord
+         }
+ 
+         const auto receiver_info = receiver->info();
+-        auto receiver_ports      = std::map<std::uint32_t, pw::port_info>{};
++        auto receiver_ports      = co_await wait_for_ports(receiver_info);
+ 
+-        while ((receiver_ports = ports_of(receiver_info)).size() < 4)
++        if (receiver_ports.size() < 4)
+         {
+-            co_await core->sync();
++            co_return logger::get()(error, "[patchbay] (create_mic) receiver ports did not show up");
+         }
+ 
+         if (should_mute)
+@@ -139,11 +144,11 @@ namespace vencord
+         }
+ 
+         const auto source_info = source->info();
+-        auto source_ports      = std::map<std::uint32_t, pw::port_info>{};
++        auto source_ports      = co_await wait_for_ports(source_info);
+ 
+-        while ((source_ports = ports_of(source_info)).size() < 4)
++        if (source_ports.size() < 4)
+         {
+-            co_await core->sync();
++            co_return logger::get()(error, "[patchbay] (create_mic) source ports did not show up");
+         }
+ 
+         static const auto is_output = [](const auto &info)
+@@ -206,6 +211,20 @@ namespace vencord
+         logger::get()("[patchbay] (create_mic) └ source: {}", virt_mic->chromium_source.id());
+     }
+ 
++    coco::task<std::map<std::uint32_t, pw::port_info>> patchbay::impl::wait_for_ports(const pw::node_info &info)
++    {
++        using clock = std::chrono::steady_clock;
++
++        auto rtn = ports_of(info);
++
++        for (const auto start = clock::now(); rtn.size() < 4 && clock::now() - start < 5s; rtn = ports_of(info))
++        {
++            co_await core->sync();
++        }
++
++        co_return rtn;
++    }
++
+     coco::task<void> patchbay::impl::mute(pw::node_info info, bool value)
+     {
+         auto node = co_await registry->bind<pw::node>(info.id);
+@@ -471,6 +490,12 @@ namespace vencord
+         logger::get()(info, "[patchbay] (link) created loopback {} -> {}", from.id, to.id);
+     }
+ 
++    bool patchbay::impl::has_loopback(std::uint32_t id) const
++    {
++        const auto it = virt_links.find(id);
++        return it != virt_links.end() && it->second.alive();
++    }
++
+     std::map<std::uint32_t, pw::port_info> patchbay::impl::ports_of(const pw::node_info &info)
+     {
+         const auto node   = std::format("{}", info.id);
+@@ -580,7 +605,7 @@ namespace vencord
+             co_return;
+         }
+ 
+-        if (virt_links.contains(from) || virt_links.contains(to))
++        if (has_loopback(from) || has_loopback(to))
+         {
+             co_return;
+         }
+@@ -716,6 +741,12 @@ namespace vencord
+         ports.erase(id);
+         links.erase(id);
+ 
++        if (default_speaker.has_value() && default_speaker->id == id)
++        {
++            logger::get()("[patchbay] (del_global) default speaker node {} was removed", id);
++            default_speaker->id.reset();
++        }
++
+         logger::get()(trace, "[patchbay] (del_global) removed global {}", id);
+     }
+ 
+@@ -727,6 +758,11 @@ namespace vencord
+             co_await create_mic(opts.mute);
+         }
+ 
++        if (!virt_mic.has_value())
++        {
++            co_return logger::get()(error, "[patchbay] (receive) could not create virtual microphone, not linking");
++        }
++
+         cleanup(clean::without_mic);
+         options.emplace(std::move(opts));
+ 
+-- 
+2.56.0
+

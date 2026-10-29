@@ -1,0 +1,39 @@
+From 015764f6d856cd3b6c147d5ad5bee7243f18fd50 Mon Sep 17 00:00:00 2001
+From: Marco Luzzaro <marcoluzzaro99@gmail.com>
+Date: Tue, 6 Oct 2026 13:39:26 +0200
+Subject: [PATCH 3/4] fix(patchbay): handle failed server info query in
+ has_pipewire
+
+pa_context_get_server_info invokes its callback with a null info pointer on
+failure, which was dereferenced unconditionally.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/patchbay.cpp | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/patchbay.cpp b/src/patchbay.cpp
+index 65ef3ca..b8dcdc8 100644
+--- a/src/patchbay.cpp
++++ b/src/patchbay.cpp
+@@ -78,7 +78,16 @@ namespace vencord
+         static auto info = [](pa_context *, const pa_server_info *info, void *data)
+         {
+             auto &[loop, result] = *reinterpret_cast<userdata *>(data);
+-            result.set_value(info->server_name);
++
++            if (info && info->server_name)
++            {
++                result.set_value(info->server_name);
++            }
++            else
++            {
++                logger::get()(error, "[patchbay] (has_pipewire) failed to query server info");
++            }
++
+             pa_mainloop_quit(loop, 0);
+         };
+ 
+-- 
+2.56.0
+

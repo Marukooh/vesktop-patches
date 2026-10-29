@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = vesktop-git
+
+[Action]
+Description = Making Vesktop Go Live encode at the picked resolution...
+When = PostTransaction
+Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-quality.py

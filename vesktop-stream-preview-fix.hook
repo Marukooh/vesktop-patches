@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = vesktop-git
+
+[Action]
+Description = Muting Vesktop stream thumbnail preview (own audio every 5 min)...
+When = PostTransaction
+Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-preview.py
