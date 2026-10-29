@@ -50,16 +50,45 @@ After a `git pull`, run `./install-all.sh` again to update the installed patcher
 
 ## Checking a stream
 
-`diagnostics/stream-stats.js` prints the live resolution, fps, bitrate, encoder and quality-limitation reason of the
-streams you send and receive. Paste it into Vesktop's DevTools console (Ctrl+Shift+I; type `allow pasting` first if
-asked). `diagnostics/stream-debug.js` dumps Discord's internal Go Live quality state on the streamer's side.
+`diagnostics/stream-stats.js` prints one row per video stream you send (`outbound`) or receive (`inbound`). Paste it
+into Vesktop's DevTools console (Ctrl+Shift+I; type `allow pasting` first if asked) while a stream is running.
+
+| Column | Meaning |
+|---|---|
+| `res`, `fps`, `kbps` | What is actually being sent or received right now. |
+| `impl` | Encoder or decoder in use (`OpenH264` = software encoding). |
+| `limit`, `limitTime` | Why WebRTC is holding quality back (`bandwidth`, `cpu` or `none`), and the seconds spent in each state. |
+| `qpAvg` | Average quantizer: lower is sharper. Around 15 or less looks good for H.264. |
+| `bweKbps` | WebRTC's current estimate of the available upload bandwidth. |
+| `rttMs`, `lossPct`, `nacks`, `retxKbps` | Round-trip time, packet loss and retransmissions reported by Discord's server. Non-zero loss or a climbing RTT point to the network (often WiFi), not the client. |
+
+What to look for:
+
+- `res` far below the resolution you picked: install the **Go Live resolution** patch.
+- Many seconds of `bandwidth` in `limitTime` right after going live, with no loss and a low RTT: that's the slow
+  bandwidth-estimate ramp, fixed by the **Go Live start bitrate** patch.
+- `bandwidth` with real loss or a high RTT: a network problem. Try ethernet, 30 fps instead of 60, or a narrower WiFi
+  channel.
+- `cpu`: the software encoder can't keep up. Lower the resolution or the fps.
+
+`diagnostics/stream-debug.js` dumps Discord's internal Go Live quality state on the streamer's side.
+
+## FAQ
+
+**Can Vesktop encode the stream on the GPU (NVENC)?** Not on NVIDIA. Chromium encodes on the GPU on Linux only through
+VA-API, and NVIDIA's VA-API driver (`libva-nvidia-driver`) only decodes. On AMD and Intel, VA-API encoding may work
+through Chromium flags, but these patches don't touch it. In practice the CPU is rarely the limit: check that `limit`
+isn't `cpu` before chasing hardware encoding.
+
+**Why not use the official Discord client?** Its native media engine does use NVENC, but on Linux it doesn't let you
+pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 
 ## How it works
 
 Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
 (`dist/js/renderer.js`, `static/dist/venmic-x64.node`) and update the asar header's size and integrity hashes. The
 resolution and thumbnail fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so they run
-through the same find/replace machinery as Vesktop's built-in patches.
+through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order.
 
 Adding a patch: write an idempotent `patch-*.py` that reads `VESKTOP_ASAR`, add a hook template in `hooks/`, then list it
 in `PATCHERS` in `install-all.sh` and in `PATCHES` in `status.py`.
