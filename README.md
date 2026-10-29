@@ -87,7 +87,7 @@ pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 
 Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
 (`dist/js/renderer.js`, `static/dist/venmic-x64.node`) and update the asar header's size and integrity hashes. The
-resolution and thumbnail fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so they run
+resolution, start-bitrate and thumbnail fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so they run
 through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order.
 
 Adding a patch: write an idempotent `patch-*.py` that reads `VESKTOP_ASAR`, add a hook template in `hooks/`, then list it
