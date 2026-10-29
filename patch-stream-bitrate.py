@@ -2,7 +2,7 @@
 """Raise Vesktop's Go Live bitrates: it hardcodes a 600 kbps start target, so streams start (and recover) blurry."""
 import hashlib, json, os, re, struct, sys
 
-ASAR    = "/usr/lib/vesktop/resources/app.asar"
+ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 ENTRY   = ["dist", "js", "renderer.js"]
 # patchStreamQuality() in src/renderer/components/ScreenSharePicker.tsx
 STOCK   = re.compile(rb"bitrateMin:[0-9.e]+,bitrateMax:[0-9.e]+,bitrateTarget:[0-9.e]+")

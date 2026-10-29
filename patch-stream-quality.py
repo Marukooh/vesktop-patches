@@ -7,7 +7,7 @@ to 1280 wide whatever resolution was picked. This routes that call through Veskt
 """
 import hashlib, json, os, re, struct, sys
 
-ASAR   = "/usr/lib/vesktop/resources/app.asar"
+ASAR   = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 ENTRY  = ["dist", "js", "renderer.js"]
 MARKER = b"vesktopGoliveFix"
 PATCH  = (b'{find:"setDesktopInput=e=>{",/*vesktopGoliveFix*/replacement:{match:'

@@ -2,7 +2,7 @@
 """Mute the temporary <video> Discord uses to grab the stream thumbnail every 5 minutes (Vesktop#1355, Equibop#130)."""
 import hashlib, json, os, re, struct, sys
 
-ASAR   = "/usr/lib/vesktop/resources/app.asar"
+ASAR   = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 ENTRY  = ["dist", "js", "renderer.js"]
 MARKER = b"ApplicationStreamPreviewUploadManager"
 # Same patch as Equibop#130, injected into the patches array of Vesktop's hideVenmicInput patch.

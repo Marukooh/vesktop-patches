@@ -2,7 +2,7 @@
 """Swap Vesktop's bundled venmic 7.2.3 (loopback double-destroy crash) for upstream main (7.2.4, rohrkabel 13.1.2)."""
 import hashlib, json, os, struct, sys
 
-ASAR    = "/usr/lib/vesktop/resources/app.asar"
+ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 FIX     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venmic-x64.node")
 ENTRY   = ["static", "dist", "venmic-x64.node"]
 BUGGY   = {"6c10a6d33ab59f2c3f13994e2572f653cf7c26961454b6300ed9add777e142ce",  # upstream venmic 7.2.3
@@ -27,13 +27,33 @@ node = header
 for part in ENTRY:
     node = node["files"][part]
 
-fix     = open(FIX, "rb").read()
-current = hashlib.sha256(data[int(node["offset"]):int(node["offset"]) + node["size"]]).hexdigest()
+fix      = open(FIX, "rb").read()
+unpacked = os.path.join(ASAR + ".unpacked", *ENTRY) if node.get("unpacked") else None
+current  = hashlib.sha256(open(unpacked, "rb").read() if unpacked else
+                          data[int(node["offset"]):int(node["offset"]) + node["size"]]).hexdigest()
 
 if current == hashlib.sha256(fix).hexdigest():
     sys.exit("vesktop-venmic-fix: already patched")
 if current not in BUGGY:
     sys.exit(f"vesktop-venmic-fix: bundled venmic changed ({current[:12]}), not touching it - check if upstream fixed the crash")
+
+# Release builds keep native modules outside the archive, in app.asar.unpacked.
+if unpacked:
+    tmp = unpacked + ".venmic-fix.tmp"
+    with open(tmp, "wb") as f:
+        f.write(fix)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, unpacked)
+    node.update(size=len(fix), integrity=integrity(fix))
+    payload = json.dumps(header, separators=(",", ":")).encode()
+    pickle  = struct.pack("<i", len(payload)) + payload
+    pickle += b"\0" * (-len(pickle) % 4)
+    pickle  = struct.pack("<I", len(pickle)) + pickle
+    with open(ASAR + ".venmic-fix.tmp", "wb") as f:
+        f.write(struct.pack("<II", 4, len(pickle)) + pickle + data)
+    os.chmod(ASAR + ".venmic-fix.tmp", 0o644)
+    os.replace(ASAR + ".venmic-fix.tmp", ASAR)
+    sys.exit(print("vesktop-venmic-fix: patched venmic installed (unpacked) - restart Vesktop"))
 
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
 

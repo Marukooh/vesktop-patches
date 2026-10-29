@@ -2,9 +2,9 @@
 Operation = Install
 Operation = Upgrade
 Type = Package
-Target = vesktop-git
+Target = @PKG@
 
 [Action]
 Description = Patching venmic in Vesktop (loopback double-destroy crash)...
 When = PostTransaction
-Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-asar.py
+Exec = /usr/bin/env VESKTOP_ASAR=@ASAR@ /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-asar.py

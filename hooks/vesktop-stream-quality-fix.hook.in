@@ -2,9 +2,9 @@
 Operation = Install
 Operation = Upgrade
 Type = Package
-Target = vesktop-git
+Target = @PKG@
 
 [Action]
 Description = Making Vesktop Go Live encode at the picked resolution...
 When = PostTransaction
-Exec = /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-quality.py
+Exec = /usr/bin/env VESKTOP_ASAR=@ASAR@ /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-quality.py

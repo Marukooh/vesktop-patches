@@ -2,10 +2,10 @@
 """Show which local Vesktop patches are applied to the installed app.asar, and whether their hooks are in place."""
 import filecmp, hashlib, json, os, struct, subprocess
 
-ASAR    = "/usr/lib/vesktop/resources/app.asar"
+ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 HERE    = os.path.dirname(os.path.abspath(__file__))
-SYSLIB  = "/usr/local/lib/vesktop-venmic-fix"
-HOOKS   = "/etc/pacman.d/hooks"
+SYSLIB  = os.environ.get("VESKTOP_PATCH_LIB", "/usr/local/lib/vesktop-venmic-fix")
+HOOKS   = os.environ.get("VESKTOP_HOOK_DIR", "/etc/pacman.d/hooks")
 
 with open(ASAR, "rb") as f:
     raw = f.read()
@@ -18,6 +18,8 @@ def entry(*path):
     node = header
     for part in path:
         node = node["files"][part]
+    if node.get("unpacked"):
+        return open(os.path.join(ASAR + ".unpacked", *path), "rb").read()
     return data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
 renderer = entry("dist", "js", "renderer.js")
@@ -35,7 +37,7 @@ PATCHES = [
 def same(a, b):
     return os.path.exists(a) and os.path.exists(b) and filecmp.cmp(a, b, shallow=False)
 
-version = subprocess.run(["pacman", "-Q", "vesktop-git"], capture_output=True, text=True).stdout.strip() or "vesktop-git not installed"
+version = subprocess.run(["pacman", "-Q", os.environ.get("VESKTOP_PKG", "vesktop-git")], capture_output=True, text=True).stdout.strip() or "vesktop-git not installed"
 print(f"{version}\n")
 print(f"{'patch':24} {'applied':8} {'hook':6} {'installed script'}")
 for name, script, hook, applied in PATCHES:
