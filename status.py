@@ -4,7 +4,7 @@ import filecmp, hashlib, json, os, struct, subprocess
 
 ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 HERE    = os.path.dirname(os.path.abspath(__file__))
-SYSLIB  = os.environ.get("VESKTOP_PATCH_LIB", "/usr/local/lib/vesktop-venmic-fix")
+SYSLIB  = os.environ.get("VESKTOP_PATCH_LIB", "/usr/local/lib/vesktop-patches")
 HOOKS   = os.environ.get("VESKTOP_HOOK_DIR", "/etc/pacman.d/hooks")
 
 with open(ASAR, "rb") as f:
@@ -24,11 +24,12 @@ def entry(*path):
 
 renderer = entry("dist", "js", "renderer.js")
 venmic   = hashlib.sha256(entry("static", "dist", "venmic-x64.node")).hexdigest()
-fixnode  = hashlib.sha256(open(os.path.join(HERE, "venmic-x64.node"), "rb").read()).hexdigest()
+fixpath  = next(p for p in (os.path.join(HERE, "venmic-x64.node"), os.path.join(HERE, "venmic", "venmic-x64.node")) if os.path.exists(p))
+fixnode  = hashlib.sha256(open(fixpath, "rb").read()).hexdigest()
 
 # name, script, hook, applied?
 PATCHES = [
-    ("venmic crash fix",        "patch-asar.py",            "vesktop-venmic-fix.hook",          venmic == fixnode),
+    ("venmic crash fix",        "patch-venmic.py",          "vesktop-venmic-fix.hook",          venmic == fixnode),
     ("stream thumbnail mute",   "patch-stream-preview.py",  "vesktop-stream-preview-fix.hook",  b"vesktopPreviewMute" in renderer),
     ("Go Live bitrate",         "patch-stream-bitrate.py",  "vesktop-stream-bitrate-fix.hook",  b"bitrateMin:15e5,bitrateMax:12e6,bitrateTarget:5e6" in renderer),
     ("Go Live resolution",      "patch-stream-quality.py",  "vesktop-stream-quality-fix.hook",  b"vesktopGoliveFix" in renderer),

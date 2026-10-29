@@ -6,9 +6,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-LIB="${VESKTOP_PATCH_LIB:-/usr/local/lib/vesktop-venmic-fix}"
+LIB="${VESKTOP_PATCH_LIB:-/usr/local/lib/vesktop-patches}"
 HOOKS="${VESKTOP_HOOK_DIR:-/etc/pacman.d/hooks}"
-PATCHERS=(patch-asar.py patch-stream-preview.py patch-stream-bitrate.py patch-stream-quality.py)
+PATCHERS=(patch-venmic.py patch-stream-preview.py patch-stream-bitrate.py patch-stream-quality.py)
 
 if [[ $EUID -ne 0 && -z "${VESKTOP_PATCH_LIB:-}" ]]; then
     exec sudo --preserve-env=VESKTOP_ASAR,VESKTOP_PKG "$0" "$@"
@@ -16,7 +16,7 @@ fi
 
 if [[ "${1:-}" == "--uninstall" ]]; then
     rm -fv "$HOOKS"/vesktop-venmic-fix.hook "$HOOKS"/vesktop-stream-*-fix.hook
-    rm -rf "$LIB"
+    rm -rf "$LIB" /usr/local/lib/vesktop-venmic-fix
     echo "Hooks and scripts removed. Reinstall Vesktop (e.g. paru -S vesktop-git) to get an unpatched app back."
     exit 0
 fi
@@ -48,15 +48,21 @@ fi
 echo "Vesktop: $ASAR${PKG:+ (package $PKG)}"
 
 install -d "$LIB"
+# Earlier versions installed to /usr/local/lib/vesktop-venmic-fix: keep its backups, drop the rest.
+OLD=/usr/local/lib/vesktop-venmic-fix
+if [[ -z "${VESKTOP_PATCH_LIB:-}" && -d "$OLD" ]]; then
+    mv -n "$OLD"/app.asar.* "$LIB/" 2>/dev/null || true
+    rm -rf "$OLD"
+fi
 install -m755 "${PATCHERS[@]/#/$HERE/}" "$HERE/status.py" "$LIB/"
-install -m644 "$HERE/venmic-x64.node" "$LIB/"
+install -m644 "$HERE/venmic/venmic-x64.node" "$LIB/"
 backup="$LIB/app.asar.backup-$(date +%Y%m%d-%H%M%S)"
 cp "$ASAR" "$backup" && echo "Backup: $backup"
 
 if [[ -n "$PKG" ]]; then
     install -d "$HOOKS"
     for t in "$HERE"/hooks/*.hook.in; do
-        sed -e "s|@PKG@|$PKG|" -e "s|@ASAR@|$ASAR|" -e "s|/usr/local/lib/vesktop-venmic-fix/|$LIB/|" "$t" > "$HOOKS/$(basename "$t" .in)"
+        sed -e "s|@PKG@|$PKG|" -e "s|@ASAR@|$ASAR|" -e "s|@LIB@|$LIB|" "$t" > "$HOOKS/$(basename "$t" .in)"
         chmod 644 "$HOOKS/$(basename "$t" .in)"
     done
     echo "pacman hooks installed in $HOOKS (re-applied after every $PKG update)"

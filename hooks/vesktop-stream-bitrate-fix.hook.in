@@ -7,4 +7,4 @@ Target = @PKG@
 [Action]
 Description = Raising Vesktop Go Live start bitrate (blurry stream start)...
 When = PostTransaction
-Exec = /usr/bin/env VESKTOP_ASAR=@ASAR@ /usr/bin/python3 /usr/local/lib/vesktop-venmic-fix/patch-stream-bitrate.py
+Exec = /usr/bin/env VESKTOP_ASAR=@ASAR@ /usr/bin/python3 @LIB@/patch-stream-bitrate.py

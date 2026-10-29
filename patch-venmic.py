@@ -3,7 +3,8 @@
 import hashlib, json, os, struct, sys
 
 ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
-FIX     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venmic-x64.node")
+HERE    = os.path.dirname(os.path.abspath(__file__))
+FIX     = next(p for p in (os.path.join(HERE, "venmic-x64.node"), os.path.join(HERE, "venmic", "venmic-x64.node")) if os.path.exists(p))
 ENTRY   = ["static", "dist", "venmic-x64.node"]
 BUGGY   = {"6c10a6d33ab59f2c3f13994e2572f653cf7c26961454b6300ed9add777e142ce",  # upstream venmic 7.2.3
            "9d6f5da90bc63f53192275217e09c9b46ee66d7a574368e92f086234da44b262",  # earlier local fix (#45 only)
@@ -53,7 +54,8 @@ if unpacked:
         f.write(struct.pack("<II", 4, len(pickle)) + pickle + data)
     os.chmod(ASAR + ".venmic-fix.tmp", 0o644)
     os.replace(ASAR + ".venmic-fix.tmp", ASAR)
-    sys.exit(print("vesktop-venmic-fix: patched venmic installed (unpacked) - restart Vesktop"))
+    print("vesktop-venmic-fix: patched venmic installed (unpacked) - restart Vesktop")
+    sys.exit(0)
 
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
 
