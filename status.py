@@ -37,6 +37,7 @@ PATCHES = [
     ("Go Live resolution",      "patch-stream-quality.py",  "vesktop-stream-quality-fix.hook",  b"vesktopGoliveFix" in renderer),
     ("Go Live start bitrate",   "patch-stream-start.py",    "vesktop-stream-start-fix.hook",    b"vesktopStartBitrate" in renderer),
     ("webcams with HW accel",   "patch-no-hevc.py",         "vesktop-no-hevc-fix.hook",         b"vesktopNoBrowserHevc" in renderer and b"vesktopNoHevc" in renderer),
+    ("several webcams",         "patch-webcam-pt.py",       "vesktop-webcam-pt-fix.hook",       b"vesktopPtFix" in renderer),
 ]
 
 def same(a, b):

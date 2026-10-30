@@ -21,11 +21,12 @@ Then restart Vesktop.
 | **Go Live start bitrate** | Every stream looks awful for roughly its first minute, then slowly sharpens. | Discord's SDP sets only `x-google-max-bitrate`, so Chromium starts its bandwidth estimate at about 300 kbps and ramps up from there. The patch adds `x-google-start-bitrate=3000` (3 Mbps); the estimate still drops if the link can't keep up. |
 | **Go Live bitrate** | Streams start soft and take a long time to sharpen. | Vesktop hard-codes min/target/max bitrates of 0.5/0.6/8 Mbps. The patch raises them to 1.5/5/12 Mbps. |
 | **Stream thumbnail mute** | Every 5 minutes, while streaming, you hear a burst of your own stream's audio. | Discord grabs the stream thumbnail by playing the stream, audio included, in a hidden unmuted `<video>`. The patch mutes it (same approach as [Equibop#130](https://github.com/Equicord/Equibop/pull/130), see [Vesktop#1355](https://github.com/Vencord/Vesktop/issues/1355)). |
-| **Webcams with hardware acceleration** | With *Hardware video acceleration* on, other people's webcams stay stuck loading. The voice server sends no video at all (0 kbps, `video-stream-receiver-ready-timeout` in the console). | With hardware decoding through VA-API (e.g. NVIDIA's `libva-nvidia-driver`) Chromium puts H.265 in its WebRTC SDP. Accounts in Discord's "browser HEVC" experiment then announce H.265 as their first video codec, and the camera video never arrives. The patch makes Discord read that experiment as off, and also answers HEVC `navigator.mediaCapabilities.decodingInfo()` queries as "unsupported" (Discord's other HEVC check). The hardware decoder keeps handling H.264, VP8 and VP9. See also [Vesktop#1207](https://github.com/Vencord/Vesktop/issues/1207). **On NVIDIA this isn't enough**, especially with several webcams on: see the FAQ. |
+| **Webcams with hardware acceleration** | With *Hardware video acceleration* on, other people's webcams stay stuck loading. The voice server sends no video at all (0 kbps, `video-stream-receiver-ready-timeout` in the console). | With hardware decoding through VA-API (e.g. NVIDIA's `libva-nvidia-driver`) Chromium puts H.265 in its WebRTC SDP. Accounts in Discord's "browser HEVC" experiment then announce H.265 as their first video codec, and the camera video never arrives. The patch makes Discord read that experiment as off, and also answers HEVC `navigator.mediaCapabilities.decodingInfo()` queries as "unsupported" (Discord's other HEVC check). The hardware decoder keeps handling H.264, VP8 and VP9. See also [Vesktop#1207](https://github.com/Vencord/Vesktop/issues/1207). |
+| **Several webcams** | With more than one webcam on in the call, only the first loads; the others stay stuck loading even though their video arrives (`framesReceived` 0, codec undefined in `getStats()`). Seen with Electron 45 (Chromium 156). | Discord answers every video receiver with H.264 on payload type 102 declared as Constrained Baseline (`profile-level-id=42e01f`), while Chromium offered 102 as Baseline (`42001f`). Newer Chromium treats that as a payload type conflict and moves Baseline to a new payload type (127) in every receiver after the first, but the voice server keeps sending 102, so those packets are dropped. The patch copies the profile from Chromium's own offer into Discord's answer, so 102 stays H.264 in every receiver. |
 | **venmic crash fix** | Vesktop crashes (SIGSEGV in `pw_impl_module_destroy`) while screen sharing with audio. | venmic 7.2.3 destroys a PipeWire loopback module twice. The patch swaps in venmic 7.2.5, which has the fix ([Vencord/venmic@aec88fc](https://github.com/Vencord/venmic/commit/aec88fc)) and two routing fixes. The binaries in `venmic/` are the unmodified x64 and arm64 prebuilds from the [`@vencord/venmic` 7.2.5 npm package](https://www.npmjs.com/package/@vencord/venmic), which need only glibc 2.30 and PipeWire. It only replaces known-buggy builds, so it does nothing once Vesktop ships 7.2.5 or newer. |
 
 Patches only matter on the side they affect. The Go Live patches help **whoever is streaming**, so everyone in your group
-who streams should install them. The webcam patch helps **whoever is watching** with hardware acceleration on.
+who streams should install them. The webcam patches help **whoever is watching**.
 
 ## Requirements
 
@@ -91,11 +92,10 @@ VA-API, and NVIDIA's VA-API driver (`libva-nvidia-driver`) only decodes. On AMD 
 through Chromium flags, but these patches don't touch it. In practice the CPU is rarely the limit: check that `limit`
 isn't `cpu` before chasing hardware encoding.
 
-**Webcams still don't load on NVIDIA, especially with several on. What now?** Turn off *Hardware video acceleration* in
-Vesktop's settings (keep *Hardware acceleration* on) and restart Vesktop. On NVIDIA that option only enables decoding
+**Is *Hardware video acceleration* worth keeping on with NVIDIA?** Not really. On NVIDIA it only enables decoding
 through `libva-nvidia-driver` (`vainfo` lists only `VAEntrypointVLD`, no encoder), which Chromium doesn't officially
-support and which fails with several video streams at once. Streams are encoded in software either way, and decoding a
-few webcams costs the CPU very little, so turning it off loses nothing in practice.
+support. Streams are encoded in software either way, and decoding a few webcams costs the CPU very little. If webcams
+still misbehave with the patches installed, turn it off (keep *Hardware acceleration* on) and restart Vesktop.
 
 **Why not use the official Discord client?** Its native media engine does use NVENC, but on Linux it doesn't let you
 pick which apps' audio goes into the stream. Vesktop (via venmic) does.
@@ -104,9 +104,10 @@ pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 
 Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
 (`dist/js/renderer.js`, `static/dist/venmic-{x64,arm64}.node`) and update the asar header's size and integrity hashes. The
-resolution, start-bitrate, thumbnail and webcam fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so
+resolution, start-bitrate, thumbnail and HEVC fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so
 they run through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order. The thumbnail and
-webcam fixes also append a fallback guard to `renderer.js`, which Vesktop runs in the page before Discord's own scripts.
+HEVC fixes also append a fallback guard to `renderer.js`, which Vesktop runs in the page before Discord's own scripts; the
+several-webcams fix is only such a guard, wrapping `RTCPeerConnection.prototype.setRemoteDescription`.
 
 The systemd unit runs `apply-all.sh`, which runs every installed `patch-*.py`. The patchers' own writes trigger the unit
 once more, and that run finds nothing left to do.

@@ -30,7 +30,7 @@ fi
 # systemctl only on the real system, not when the paths are overridden for testing.
 run_systemctl() { [[ -z "${VESKTOP_UNIT_DIR:-}" ]] && systemctl "$@" || true; }
 
-remove_hooks() { rm -fv "$HOOKS"/vesktop-venmic-fix.hook "$HOOKS"/vesktop-stream-*-fix.hook "$HOOKS"/vesktop-no-hevc-fix.hook; }
+remove_hooks() { rm -fv "$HOOKS"/vesktop-venmic-fix.hook "$HOOKS"/vesktop-stream-*-fix.hook "$HOOKS"/vesktop-no-hevc-fix.hook "$HOOKS"/vesktop-webcam-pt-fix.hook; }
 remove_units() {
     if [[ -f "$UNITS/$UNIT.path" ]]; then
         run_systemctl disable --now "$UNIT.path"
