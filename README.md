@@ -20,10 +20,11 @@ Then restart Vesktop.
 | **Go Live start bitrate** | Every stream looks awful for roughly its first minute, then slowly sharpens. | Discord's SDP sets only `x-google-max-bitrate`, so Chromium starts its bandwidth estimate at about 300 kbps and ramps up from there. The patch adds `x-google-start-bitrate=3000` (3 Mbps); the estimate still drops if the link can't keep up. |
 | **Go Live bitrate** | Streams start soft and take a long time to sharpen. | Vesktop hard-codes min/target/max bitrates of 0.5/0.6/8 Mbps. The patch raises them to 1.5/5/12 Mbps. |
 | **Stream thumbnail mute** | Every 5 minutes, while streaming, you hear a burst of your own stream's audio. | Discord grabs the stream thumbnail by playing the stream, audio included, in a hidden unmuted `<video>`. The patch mutes it (same approach as [Equibop#130](https://github.com/Equicord/Equibop/pull/130), see [Vesktop#1355](https://github.com/Vencord/Vesktop/issues/1355)). |
+| **Webcams with hardware acceleration** | With *Hardware video acceleration* on, other people's webcams stay stuck loading. The voice server sends no video at all (0 kbps, `video-stream-receiver-ready-timeout` in the console). | On Linux, Discord asks `navigator.mediaCapabilities.decodingInfo()` whether HEVC decodes in hardware, and if so tells the server it can receive H.265. Through VA-API (e.g. NVIDIA's `libva-nvidia-driver`) Chromium says yes, and the camera video never arrives. The patch makes HEVC queries answer "unsupported", so the hardware decoder keeps handling the other codecs. See also [Vesktop#1207](https://github.com/Vencord/Vesktop/issues/1207). |
 | **venmic crash fix** | Vesktop crashes (SIGSEGV in `pw_impl_module_destroy`) while screen sharing with audio. | venmic 7.2.3 destroys a PipeWire loopback module twice. The patch swaps in a venmic 7.2.4 build (upstream `main`, [Vencord/venmic@aec88fc](https://github.com/Vencord/venmic/commit/aec88fc)). It only replaces known-buggy builds, so it does nothing once Vesktop ships the fix. |
 
 Patches only matter on the side they affect. The Go Live patches help **whoever is streaming**, so everyone in your group
-who streams should install them.
+who streams should install them. The webcam patch helps **whoever is watching** with hardware acceleration on.
 
 ## Requirements
 
@@ -88,7 +89,8 @@ pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
 (`dist/js/renderer.js`, `static/dist/venmic-x64.node`) and update the asar header's size and integrity hashes. The
 resolution, start-bitrate and thumbnail fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so they run
-through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order.
+through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order. The webcam fix (and the
+thumbnail fix's fallback guard) is appended to `renderer.js`, which Vesktop runs in the page before Discord's own scripts.
 
 Adding a patch: write an idempotent `patch-*.py` that reads `VESKTOP_ASAR`, add a hook template in `hooks/`, then list it
 in `PATCHERS` in `install-all.sh` and in `PATCHES` in `status.py`.
