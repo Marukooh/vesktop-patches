@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """Keep other people's webcams loading with Vesktop's hardware video acceleration on.
 
-On Linux, Discord's web client asks navigator.mediaCapabilities.decodingInfo() whether HEVC decodes in hardware and, if
-it does, tells the voice server it can receive H.265. With hardware acceleration on (VA-API, e.g. NVIDIA's
-libva-nvidia-driver) Chromium says yes, the server then sends no camera video to this client at all, and webcams stay
-stuck loading. This makes HEVC decode queries answer "unsupported", so Discord keeps to H.264/VP8/VP9/AV1 while the
-hardware decoder still handles those.
+With hardware acceleration on (VA-API, e.g. NVIDIA's libva-nvidia-driver) Chromium can decode H.265, so it puts H.265 in
+its WebRTC SDP. When the account is in Discord's "browser HEVC" experiment, Discord's web client then announces H.265 as
+its first video codec, and the voice server sends no camera video to this client at all: webcams stay stuck loading.
+
+The main fix is a Vencord-style patch that makes Discord read that experiment flag as off, so it keeps to
+H.264/VP8/VP9 (the hardware decoder still handles those). A fallback guard also makes HEVC decodingInfo() queries answer
+"unsupported", which covers Discord's other HEVC check.
 """
-import hashlib, json, os, struct, sys
+import hashlib, json, os, re, struct, sys
 
 ASAR   = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
 ENTRY  = ["dist", "js", "renderer.js"]
-MARKER = b"vesktopNoHevc"
+MARKER = b"vesktopNoBrowserHevc"
+PATCH  = (b'{find:"parseLocalDescription(){",/*vesktopNoBrowserHevc*/replacement:{match:'
+          b'/this\\.experimentFlags\\.has\\(\\i\\.\\i\\.BROWSER_HEVC\\)/g,replace:"!1"}},')
+# Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list, like the other
+# patches injected here, so they can go in any order.
+ANCHOR = re.compile(rb'\{find:"this\.getDefaultGoliveQuality\(\)"')
+GUARD_MARKER = b"vesktopNoHevc*/"
 # renderer.js runs in the page's main world before Discord's own scripts, so this wraps the API Discord calls.
 GUARD  = (b';(()=>{/*vesktopNoHevc*/const P=globalThis.MediaCapabilities?.prototype,d=P?.decodingInfo;if(!d)return;'
           b'P.decodingInfo=function(c){try{if(/\\b(hev1|hvc1)\\b/i.test(c?.video?.contentType??""))'
@@ -37,9 +45,17 @@ for part in ENTRY:
 
 js = data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
-if MARKER in js:
+fix = js
+if MARKER not in fix:
+    m = ANCHOR.search(fix)
+    if m:
+        fix = fix[:m.start()] + PATCH + fix[m.start():]
+    else:
+        print("vesktop-no-hevc-fix: Vesktop patch list not found, only installing the decodingInfo guard")
+if GUARD_MARKER not in fix:
+    fix = fix + b"\n" + GUARD
+if fix == js:
     sys.exit("vesktop-no-hevc-fix: already patched")
-fix = js + b"\n" + GUARD
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
 
 payload = json.dumps(header, separators=(",", ":")).encode()
@@ -52,4 +68,4 @@ with open(tmp, "wb") as f:
     f.write(struct.pack("<II", 4, len(pickle)) + pickle + data + fix)
 os.chmod(tmp, 0o644)
 os.replace(tmp, ASAR)
-print("vesktop-no-hevc-fix: HEVC hidden from Discord, webcams load with hardware acceleration on - restart Vesktop")
+print("vesktop-no-hevc-fix: H.265 hidden from Discord, webcams load with hardware acceleration on - restart Vesktop")
