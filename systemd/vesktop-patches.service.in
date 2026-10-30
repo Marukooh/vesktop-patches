@@ -1,0 +1,9 @@
+[Unit]
+Description=Re-apply vesktop-patches after a Vesktop update
+
+[Service]
+Type=oneshot
+# Give the package manager time to finish writing the update.
+ExecStartPre=/bin/sleep 5
+Environment=VESKTOP_ASAR=@ASAR@
+ExecStart=@LIB@/apply-all.sh

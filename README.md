@@ -1,8 +1,9 @@
 # vesktop-patches
 
 Fixes for [Vesktop](https://github.com/Vencord/Vesktop) on Linux that haven't landed upstream yet. The main ones are
-**blurry Go Live streams** and **your own stream audio blasting every 5 minutes**. One script installs them all, and on
-Arch-based distros a pacman hook re-applies each one after every Vesktop update.
+**blurry Go Live streams** and **your own stream audio blasting every 5 minutes**. One script installs them all on any
+distro and sets up their automatic re-application after every Vesktop update: pacman hooks on Arch-based distros, a
+systemd unit everywhere else.
 
 ```sh
 git clone https://github.com/Marukooh/vesktop-patches
@@ -21,30 +22,39 @@ Then restart Vesktop.
 | **Go Live bitrate** | Streams start soft and take a long time to sharpen. | Vesktop hard-codes min/target/max bitrates of 0.5/0.6/8 Mbps. The patch raises them to 1.5/5/12 Mbps. |
 | **Stream thumbnail mute** | Every 5 minutes, while streaming, you hear a burst of your own stream's audio. | Discord grabs the stream thumbnail by playing the stream, audio included, in a hidden unmuted `<video>`. The patch mutes it (same approach as [Equibop#130](https://github.com/Equicord/Equibop/pull/130), see [Vesktop#1355](https://github.com/Vencord/Vesktop/issues/1355)). |
 | **Webcams with hardware acceleration** | With *Hardware video acceleration* on, other people's webcams stay stuck loading. The voice server sends no video at all (0 kbps, `video-stream-receiver-ready-timeout` in the console). | On Linux, Discord asks `navigator.mediaCapabilities.decodingInfo()` whether HEVC decodes in hardware, and if so tells the server it can receive H.265. Through VA-API (e.g. NVIDIA's `libva-nvidia-driver`) Chromium says yes, and the camera video never arrives. The patch makes HEVC queries answer "unsupported", so the hardware decoder keeps handling the other codecs. See also [Vesktop#1207](https://github.com/Vencord/Vesktop/issues/1207). |
-| **venmic crash fix** | Vesktop crashes (SIGSEGV in `pw_impl_module_destroy`) while screen sharing with audio. | venmic 7.2.3 destroys a PipeWire loopback module twice. The patch swaps in a venmic 7.2.4 build (upstream `main`, [Vencord/venmic@aec88fc](https://github.com/Vencord/venmic/commit/aec88fc)). It only replaces known-buggy builds, so it does nothing once Vesktop ships the fix. |
+| **venmic crash fix** | Vesktop crashes (SIGSEGV in `pw_impl_module_destroy`) while screen sharing with audio. | venmic 7.2.3 destroys a PipeWire loopback module twice. The patch swaps in venmic 7.2.5, which has the fix ([Vencord/venmic@aec88fc](https://github.com/Vencord/venmic/commit/aec88fc)) and two routing fixes. The binaries in `venmic/` are the unmodified x64 and arm64 prebuilds from the [`@vencord/venmic` 7.2.5 npm package](https://www.npmjs.com/package/@vencord/venmic), which need only glibc 2.30 and PipeWire. It only replaces known-buggy builds, so it does nothing once Vesktop ships 7.2.5 or newer. |
 
 Patches only matter on the side they affect. The Go Live patches help **whoever is streaming**, so everyone in your group
 who streams should install them. The webcam patch helps **whoever is watching** with hardware acceleration on.
 
 ## Requirements
 
-- Vesktop installed as a regular package with a writable `resources/app.asar`: `vesktop-git`, `vesktop` or
-  `vesktop-bin` from the AUR, or any other install if you pass `VESKTOP_ASAR=/path/to/resources/app.asar`.
-  **Flatpak isn't supported**, because its files are read-only.
-- `python3` and `sudo`.
-- pacman for the auto re-apply hooks. Without it the patches still apply, but you have to run `./install-all.sh`
-  again after each Vesktop update.
+- Linux on x86_64 or arm64, with Vesktop installed so that its `resources/app.asar` is writable:
+
+  | Install | Found automatically at | Supported |
+  |---|---|---|
+  | AUR (`vesktop-git`, `vesktop`, `vesktop-bin`) or another distro package | wherever the package puts it (asked to pacman, dpkg or rpm) | yes |
+  | Official `.deb` / `.rpm` from [Vesktop's releases](https://github.com/Vencord/Vesktop/releases) | `/opt/Vesktop` | yes |
+  | Official `.tar.gz` | via the `vesktop` command, `/opt`, or `~/Applications`, `~/.local/share`, `~/opt`, `~` | yes |
+  | Anywhere else | pass `VESKTOP_ASAR=/path/to/resources/app.asar` | yes |
+  | Flatpak, Snap, AppImage, NixOS | | **no**: their files are read-only |
+
+- `python3`, and `sudo`, `doas` or `pkexec`.
+- To re-apply the patches after Vesktop updates: pacman (one hook per patch) or systemd (one path unit that watches
+  `app.asar`, so it works with apt, dnf, zypper or a new tarball unpacked over the old one). Without either, the patches
+  still apply, but you have to run `./install-all.sh` again after each Vesktop update. `VESKTOP_REAPPLY=pacman|systemd|none`
+  forces a method.
 
 ## Usage
 
 ```sh
 ./install-all.sh              # install or update everything (safe to re-run)
-./status.py                   # what's applied, whether the hooks are in place, whether installed scripts are current
-./install-all.sh --uninstall  # remove the hooks and scripts, then reinstall Vesktop for a clean app
+./status.py                   # what's applied, what re-applies it after updates, whether installed scripts are current
+./install-all.sh --uninstall  # remove the hooks, unit and scripts, then reinstall Vesktop for a clean app
 ```
 
 `install-all.sh` finds Vesktop, copies the patchers to `/usr/local/lib/vesktop-patches/`, backs up `app.asar` there, installs
-one pacman hook per patch and applies everything. Each patcher is idempotent: when its change is already in place, or
+the pacman hooks or the `vesktop-patches.path` systemd unit, and applies everything. Each patcher is idempotent: when its change is already in place, or
 when the code it targets has changed upstream, it leaves the file alone and says why.
 
 After a `git pull`, run `./install-all.sh` again to update the installed patchers.
@@ -87,18 +97,22 @@ pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 ## How it works
 
 Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
-(`dist/js/renderer.js`, `static/dist/venmic-x64.node`) and update the asar header's size and integrity hashes. The
+(`dist/js/renderer.js`, `static/dist/venmic-{x64,arm64}.node`) and update the asar header's size and integrity hashes. The
 resolution, start-bitrate and thumbnail fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so they run
 through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order. The webcam fix (and the
 thumbnail fix's fallback guard) is appended to `renderer.js`, which Vesktop runs in the page before Discord's own scripts.
 
-Adding a patch: write an idempotent `patch-*.py` that reads `VESKTOP_ASAR`, add a hook template in `hooks/`, then list it
-in `PATCHERS` in `install-all.sh` and in `PATCHES` in `status.py`.
+The systemd unit runs `apply-all.sh`, which runs every installed `patch-*.py`. The patchers' own writes trigger the unit
+once more, and that run finds nothing left to do.
+
+Adding a patch: write an idempotent `patch-*.py` that reads `VESKTOP_ASAR`, add a pacman hook template in `hooks/`, and
+list it in `PATCHES` in `status.py`. `install-all.sh` and `apply-all.sh` pick up every `patch-*.py` on their own.
 
 ## Disclaimer
 
 Not affiliated with Vesktop, Vencord or Discord. Client modifications are against Discord's Terms of Service, as is
-Vesktop itself. Use at your own risk. Tested with `vesktop-git` 1.6.8 on Arch-based CachyOS.
+Vesktop itself. Use at your own risk. Tested with `vesktop-git` 1.6.8 on Arch-based CachyOS, and against the official 1.6.8 release
+archive.
 
 ## License
 

@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch Vesktop's app.asar to re-apply vesktop-patches after updates
+
+[Path]
+PathChanged=@ASAR@
+
+[Install]
+WantedBy=multi-user.target
