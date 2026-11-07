@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Make Discord encode Go Live at the resolution picked in Vesktop's picker.
 
-Discord's web setDesktopInput() reads the capture track's constraints when the stream starts, before Vesktop's
-applyConstraints() runs, and calls setGoliveQuality() with that (~720p). The encoder then scales the capture down
-to 1280 wide whatever resolution was picked. This routes that call through Vesktop's own patchStreamQuality().
+Up to 1.6.8: Discord's web setDesktopInput() reads the capture track's constraints when the stream starts, before
+Vesktop's applyConstraints() runs, and calls setGoliveQuality() with that (~720p). The encoder then scales the capture
+down to 1280 wide whatever resolution was picked. This routes that call through Vesktop's own patchStreamQuality().
+
+1.6.9 fixes that itself, but adds scaleEncodeToSinkWants(), which scales the encode resolution down to the size of the
+viewer's video tile: the stream stays low-res until the viewer goes fullscreen. This makes it return the picked
+resolution unchanged, as 1.6.8 with this patch did.
 """
 import hashlib, json, os, re, struct, sys
 
@@ -16,6 +20,9 @@ PATCH  = (b'{find:"setDesktopInput=e=>{",/*vesktopGoliveFix*/replacement:{match:
 # Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list (whose $self
 # has patchStreamQuality()), so the other patches injected here can go in any order.
 ANCHOR = re.compile(rb'\{find:"(?:this\.)?getDefaultGoliveQuality\(\)')  # 1.6.9+ dropped "this."
+# 1.6.9+ (VesktopStreamFixes): keep the encode resolution instead of scaling it to the viewer's tile.
+SINK     = re.compile(rb"scaleEncodeToSinkWants\(([\w$]+),[\w$]+\)\{")
+SINK_FIX = rb"\g<0>return \1;/*vesktopGoliveFix*/"
 BLOCK  = 4 * 1024 * 1024
 
 def integrity(data):
@@ -36,14 +43,17 @@ for part in ENTRY:
 
 js = data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
-if b"applyStreamQuality" in js:
-    sys.exit("vesktop-stream-quality-fix: Vesktop 1.6.9+ sets Go Live resolution/bitrate itself (VesktopStreamFixes), nothing to do")
 if MARKER in js:
     sys.exit("vesktop-stream-quality-fix: already patched")
-m = ANCHOR.search(js)
-if not m:
-    sys.exit("vesktop-stream-quality-fix: patchStreamQuality patch not found, not touching it - check ScreenSharePicker upstream")
-fix = js[:m.start()] + PATCH + js[m.start():]
+if b"applyStreamQuality" in js:
+    fix, n = SINK.subn(SINK_FIX, js)
+    if n != 1:
+        sys.exit(f"vesktop-stream-quality-fix: found {n} scaleEncodeToSinkWants, not touching it - check VesktopStreamFixes upstream")
+else:
+    m = ANCHOR.search(js)
+    if not m:
+        sys.exit("vesktop-stream-quality-fix: patchStreamQuality patch not found, not touching it - check ScreenSharePicker upstream")
+    fix = js[:m.start()] + PATCH + js[m.start():]
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
 
 payload = json.dumps(header, separators=(",", ":")).encode()

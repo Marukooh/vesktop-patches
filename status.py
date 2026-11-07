@@ -29,7 +29,7 @@ renderer = entry("dist", "js", "renderer.js")
 PATCHES = [
     ("stream thumbnail mute",   "patch-stream-preview.py",  "vesktop-stream-preview-fix.hook",  b"vesktopPreviewMute" in renderer),
     ("Go Live bitrate",         "patch-stream-bitrate.py",  "vesktop-stream-bitrate-fix.hook",  b"bitrateMin:15e5,bitrateMax:12e6,bitrateTarget:5e6" in renderer or b"vesktopBitrate*/" in renderer),
-    ("Go Live resolution",      "patch-stream-quality.py",  "vesktop-stream-quality-fix.hook",  b"vesktopGoliveFix" in renderer or b"applyStreamQuality" in renderer),
+    ("Go Live resolution",      "patch-stream-quality.py",  "vesktop-stream-quality-fix.hook",  b"vesktopGoliveFix" in renderer),
     ("Go Live start bitrate",   "patch-stream-start.py",    "vesktop-stream-start-fix.hook",    b"vesktopStartBitrate" in renderer),
     ("webcams with HW accel",   "patch-no-hevc.py",         "vesktop-no-hevc-fix.hook",         b"vesktopNoBrowserHevc" in renderer and b"vesktopNoHevc" in renderer),
     ("several webcams",         "patch-webcam-pt.py",       "vesktop-webcam-pt-fix.hook",       b"vesktopPtFix" in renderer),
