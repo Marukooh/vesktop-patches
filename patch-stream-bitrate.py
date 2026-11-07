@@ -27,6 +27,8 @@ for part in ENTRY:
 
 js = data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
+if b"applyStreamQuality" in js:
+    sys.exit("vesktop-stream-bitrate-fix: Vesktop 1.6.9+ sets Go Live resolution/bitrate itself (VesktopStreamFixes), nothing to do")
 if WANTED in js:
     sys.exit("vesktop-stream-bitrate-fix: already patched")
 fix, n = STOCK.subn(WANTED, js)

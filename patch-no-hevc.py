@@ -18,7 +18,7 @@ PATCH  = (b'{find:"parseLocalDescription(){",/*vesktopNoBrowserHevc*/replacement
           b'/this\\.experimentFlags\\.has\\(\\i\\.\\i\\.BROWSER_HEVC\\)/g,replace:"!1"}},')
 # Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list, like the other
 # patches injected here, so they can go in any order.
-ANCHOR = re.compile(rb'\{find:"this\.getDefaultGoliveQuality\(\)"')
+ANCHOR = re.compile(rb'\{find:"(?:this\.)?getDefaultGoliveQuality\(\)')  # 1.6.9+ dropped "this."
 GUARD_MARKER = b"vesktopNoHevc*/"
 # renderer.js runs in the page's main world before Discord's own scripts, so this wraps the API Discord calls.
 GUARD  = (b';(()=>{/*vesktopNoHevc*/const P=globalThis.MediaCapabilities?.prototype,d=P?.decodingInfo;if(!d)return;'

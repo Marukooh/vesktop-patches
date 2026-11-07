@@ -15,7 +15,7 @@ PATCH  = (b'{find:"setDesktopInput=e=>{",/*vesktopGoliveFix*/replacement:{match:
           b'replace:"this.videoQualityManager.setGoliveQuality($self.patchStreamQuality({encode:{...$1},capture:{...$1},bitrateMax:$2}))"}},')
 # Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list (whose $self
 # has patchStreamQuality()), so the other patches injected here can go in any order.
-ANCHOR = re.compile(rb'\{find:"this\.getDefaultGoliveQuality\(\)"')
+ANCHOR = re.compile(rb'\{find:"(?:this\.)?getDefaultGoliveQuality\(\)')  # 1.6.9+ dropped "this."
 BLOCK  = 4 * 1024 * 1024
 
 def integrity(data):
@@ -36,6 +36,8 @@ for part in ENTRY:
 
 js = data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
+if b"applyStreamQuality" in js:
+    sys.exit("vesktop-stream-quality-fix: Vesktop 1.6.9+ sets Go Live resolution/bitrate itself (VesktopStreamFixes), nothing to do")
 if MARKER in js:
     sys.exit("vesktop-stream-quality-fix: already patched")
 m = ANCHOR.search(js)

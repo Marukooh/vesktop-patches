@@ -15,7 +15,7 @@ PATCH  = (b'{find:"x-google-max-bitrate",/*vesktopStartBitrate*/replacement:{mat
           b'replace:\'$&+";x-google-start-bitrate=3000"\'}},')
 # Inserted right before the getDefaultGoliveQuality entry of Vesktop's ScreenSharePicker patch list (whose $self
 # has patchStreamQuality()), so the other patches injected here can go in any order.
-ANCHOR = re.compile(rb'\{find:"this\.getDefaultGoliveQuality\(\)"')
+ANCHOR = re.compile(rb'\{find:"(?:this\.)?getDefaultGoliveQuality\(\)')  # 1.6.9+ dropped "this."
 BLOCK  = 4 * 1024 * 1024
 
 def integrity(data):
