@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raise Vesktop's Go Live bitrates: it hardcodes a 600 kbps start target, so streams start (and recover) blurry."""
+"""Raise Vesktop's Go Live bitrates: the start target stays at 600 kbps, so streams start (and recover) blurry."""
 import hashlib, json, os, re, struct, sys
 
 ASAR    = os.environ.get("VESKTOP_ASAR", "/usr/lib/vesktop/resources/app.asar")
@@ -7,6 +7,9 @@ ENTRY   = ["dist", "js", "renderer.js"]
 # patchStreamQuality() in src/renderer/components/ScreenSharePicker.tsx
 STOCK   = re.compile(rb"bitrateMin:[0-9.e]+,bitrateMax:[0-9.e]+,bitrateTarget:[0-9.e]+")
 WANTED  = b"bitrateMin:15e5,bitrateMax:12e6,bitrateTarget:5e6"
+# Vesktop 1.6.9+ applyStreamQuality() only sets bitrateMax, so Discord's desktopBitrate min/target (0.5/0.6 Mbps) stay.
+NEW     = re.compile(rb"(\.videoQualityManager\.setGoliveQuality\(\{capture:([\w$]+),encode:\2,bitrateMax:([\w$]+))\}\)")
+NEW_FIX = rb"\1,bitrateMin:15e5/*vesktopBitrate*/,bitrateTarget:Math.min(5e6,\3)})"
 BLOCK   = 4 * 1024 * 1024
 
 def integrity(data):
@@ -27,11 +30,11 @@ for part in ENTRY:
 
 js = data[int(node["offset"]):int(node["offset"]) + node["size"]]
 
-if b"applyStreamQuality" in js:
-    sys.exit("vesktop-stream-bitrate-fix: Vesktop 1.6.9+ sets Go Live resolution/bitrate itself (VesktopStreamFixes), nothing to do")
-if WANTED in js:
+if WANTED in js or b"vesktopBitrate*/" in js:
     sys.exit("vesktop-stream-bitrate-fix: already patched")
 fix, n = STOCK.subn(WANTED, js)
+if n == 0:
+    fix, n = NEW.subn(NEW_FIX, js)
 if n != 1:
     sys.exit(f"vesktop-stream-bitrate-fix: found {n} bitrate blocks, not touching it - check patchStreamQuality upstream")
 node.update(offset=str(len(data)), size=len(fix), integrity=integrity(fix))
@@ -46,4 +49,4 @@ with open(tmp, "wb") as f:
     f.write(struct.pack("<II", 4, len(pickle)) + pickle + data + fix)
 os.chmod(tmp, 0o644)
 os.replace(tmp, ASAR)
-print("vesktop-stream-bitrate-fix: Go Live bitrate raised (start 5 Mbps, min 1.5, max 12) - restart Vesktop")
+print("vesktop-stream-bitrate-fix: Go Live bitrate raised (start 5 Mbps, min 1.5) - restart Vesktop")
