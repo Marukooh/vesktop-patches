@@ -23,7 +23,6 @@ Then restart Vesktop.
 | **Stream thumbnail mute** | Every 5 minutes, while streaming, you hear a burst of your own stream's audio. | Discord grabs the stream thumbnail by playing the stream, audio included, in a hidden unmuted `<video>`. The patch mutes it (same approach as [Equibop#130](https://github.com/Equicord/Equibop/pull/130), see [Vesktop#1355](https://github.com/Vencord/Vesktop/issues/1355)). |
 | **Webcams with hardware acceleration** | With *Hardware video acceleration* on, other people's webcams stay stuck loading. The voice server sends no video at all (0 kbps, `video-stream-receiver-ready-timeout` in the console). | With hardware decoding through VA-API (e.g. NVIDIA's `libva-nvidia-driver`) Chromium puts H.265 in its WebRTC SDP. Accounts in Discord's "browser HEVC" experiment then announce H.265 as their first video codec, and the camera video never arrives. The patch makes Discord read that experiment as off, and also answers HEVC `navigator.mediaCapabilities.decodingInfo()` queries as "unsupported" (Discord's other HEVC check). The hardware decoder keeps handling H.264, VP8 and VP9. See also [Vesktop#1207](https://github.com/Vencord/Vesktop/issues/1207). |
 | **Several webcams** | With more than one webcam on in the call, only the first loads; the others stay stuck loading even though their video arrives (`framesReceived` 0, codec undefined in `getStats()`). Seen with Electron 45 (Chromium 156). | Discord answers every video receiver with H.264 on payload type 102 declared as Constrained Baseline (`profile-level-id=42e01f`), while Chromium offered 102 as Baseline (`42001f`). Newer Chromium treats that as a payload type conflict and moves Baseline to a new payload type (127) in every receiver after the first, but the voice server keeps sending 102, so those packets are dropped. The patch copies the profile from Chromium's own offer into Discord's answer, so 102 stays H.264 in every receiver. |
-| **venmic crash fix** | Vesktop crashes (SIGSEGV in `pw_impl_module_destroy`) while screen sharing with audio. | venmic 7.2.3 destroys a PipeWire loopback module twice. The patch swaps in venmic 7.2.5, which has the fix ([Vencord/venmic@aec88fc](https://github.com/Vencord/venmic/commit/aec88fc)) and two routing fixes. The binaries in `venmic/` are the unmodified x64 and arm64 prebuilds from the [`@vencord/venmic` 7.2.5 npm package](https://www.npmjs.com/package/@vencord/venmic), which need only glibc 2.30 and PipeWire. It only replaces known-buggy builds, so it does nothing once Vesktop ships 7.2.5 or newer. |
 
 Patches only matter on the side they affect. The Go Live patches help **whoever is streaming**, so everyone in your group
 who streams should install them. The webcam patches help **whoever is watching**.
@@ -102,8 +101,8 @@ pick which apps' audio goes into the stream. Vesktop (via venmic) does.
 
 ## How it works
 
-Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite single entries in that archive
-(`dist/js/renderer.js`, `static/dist/venmic-{x64,arm64}.node`) and update the asar header's size and integrity hashes. The
+Vesktop's UI and its Discord patches live in `resources/app.asar`. The patchers rewrite a single entry in that archive
+(`dist/js/renderer.js`) and update the asar header's size and integrity hashes. The
 resolution, start-bitrate, thumbnail and HEVC fixes are injected as extra entries in Vesktop's own Vencord-style patch list, so
 they run through the same find/replace machinery as Vesktop's built-in patches, and they apply in any order. The thumbnail and
 HEVC fixes also append a fallback guard to `renderer.js`, which Vesktop runs in the page before Discord's own scripts; the

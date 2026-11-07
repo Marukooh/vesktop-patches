@@ -135,7 +135,7 @@ if [[ -z "${VESKTOP_PATCH_LIB:-}" && -d "$OLD" ]]; then
 fi
 rm -f "$LIB"/patch-*.py
 install -m755 "$HERE"/patch-*.py "$HERE/apply-all.sh" "$HERE/status.py" "$LIB/"
-install -m644 "$HERE"/venmic/venmic-*.node "$LIB/"
+rm -f "$LIB"/venmic-*.node  # venmic fix dropped: Vesktop 1.6.9 ships venmic 7.2.5
 backup="$LIB/app.asar.backup-$(date +%Y%m%d-%H%M%S)"
 cp "$ASAR" "$backup" && echo "Backup: $backup"
 
@@ -143,6 +143,7 @@ fill() { sed -e "s|@PKG@|$PKG|" -e "s|@ASAR@|$ASAR|" -e "s|@LIB@|$LIB|" "$1" > "
 case "$MODE" in
     pacman)
         remove_units
+        remove_hooks >/dev/null  # drops hooks of patches no longer in this repo
         install -d "$HOOKS"
         for t in "$HERE"/hooks/*.hook.in; do fill "$t" "$HOOKS/$(basename "$t" .in)"; done
         echo "pacman hooks installed in $HOOKS (re-applied after every $PKG update)"
