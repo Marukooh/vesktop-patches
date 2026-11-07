@@ -6,12 +6,18 @@ distro and sets up their automatic re-application after every Vesktop update: pa
 systemd unit everywhere else.
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/Marukooh/vesktop-patches/main/get.sh | sh
+```
+
+Then restart Vesktop. Run the same command again to update, or add `-s -- --uninstall` after `sh` to remove everything.
+[`get.sh`](get.sh) only downloads this repo to a temporary folder and runs `install-all.sh` from it; read it first if you
+prefer, or clone the repo and run `./install-all.sh` yourself:
+
+```sh
 git clone https://github.com/Marukooh/vesktop-patches
 cd vesktop-patches
 ./install-all.sh
 ```
-
-Then restart Vesktop.
 
 ## What's fixed
 
