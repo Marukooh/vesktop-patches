@@ -23,7 +23,7 @@ cd vesktop-patches
 
 | Patch | Symptom | Cause and fix |
 |---|---|---|
-| **Go Live resolution** | Streams look blurry the whole time, whatever resolution you pick. On a 21:9 monitor the viewer gets 1280×536. | When the stream starts, Discord's web client sizes the encoder from the capture track's constraints (about 720p). Vesktop only applies the resolution you picked 100 ms later, so the encoder keeps scaling the capture down to 1280 px wide. The patch passes the picker's resolution, framerate and bitrate straight to Discord. 1.6.9 fixes that part itself but scales the encode resolution down to the viewer's video tile (`scaleEncodeToSinkWants`), so the stream stays low-res until the viewer goes fullscreen; on 1.6.9 the patch turns that scaling off. |
+| **Go Live resolution** | Streams look blurry the whole time, whatever resolution you pick. On a 21:9 monitor the viewer gets 1280×536. | When the stream starts, Discord's web client sizes the encoder from the capture track's constraints (about 720p). Vesktop only applies the resolution you picked 100 ms later, so the encoder keeps scaling the capture down to 1280 px wide. The patch passes the picker's resolution, framerate and bitrate straight to Discord. 1.6.9 fixes this itself, so there the patch does nothing. (An earlier version turned off 1.6.9's `scaleEncodeToSinkWants`, which scales the encode resolution down to the viewer's video tile. That made streams blurrier, because Discord cuts the bitrate to the tile size anyway; on 1.6.9 the patch now removes that change.) |
 | **Go Live start bitrate** | Every stream looks awful for roughly its first minute, then slowly sharpens. | Discord's SDP sets only `x-google-max-bitrate`, so Chromium starts its bandwidth estimate at about 300 kbps and ramps up from there. The patch adds `x-google-start-bitrate=3000` (3 Mbps); the estimate still drops if the link can't keep up. |
 | **Go Live bitrate** | Streams start soft and take a long time to sharpen. | Discord's web client starts Go Live at a 0.6 Mbps target (0.5 Mbps min). Up to 1.6.8 Vesktop hard-coded 0.5/0.6/8 Mbps; 1.6.9 only raises the max (3.5–20 Mbps by resolution) and keeps Discord's min and target. The patch raises the min to 1.5 Mbps and the target to 5 Mbps (capped at the max; on 1.6.8 and older the max goes to 12 Mbps). |
 | **Stream thumbnail mute** | Every 5 minutes, while streaming, you hear a burst of your own stream's audio. | Discord grabs the stream thumbnail by playing the stream, audio included, in a hidden unmuted `<video>`. The patch mutes it (same approach as [Equibop#130](https://github.com/Equicord/Equibop/pull/130), see [Vesktop#1355](https://github.com/Vencord/Vesktop/issues/1355), closed as fixed by the venmic update, but it still happens on 1.6.9). |
@@ -87,6 +87,9 @@ What to look for:
 - `bandwidth` with real loss or a high RTT: a network problem. Try ethernet, 30 fps instead of 60, or a narrower WiFi
   channel.
 - `cpu`: the software encoder can't keep up. Lower the resolution or the fps.
+- `bweKbps` stuck at the same round number (e.g. exactly 4200) while your upload is much faster: Discord's server is
+  capping the stream, likely by account tier (no Nitro). No client patch can lift that. Get more out of the bitrate you
+  have: stream at 30 fps instead of 60, or at a lower resolution, especially on an ultrawide.
 
 `diagnostics/stream-debug.js` dumps Discord's internal Go Live quality state on the streamer's side.
 
